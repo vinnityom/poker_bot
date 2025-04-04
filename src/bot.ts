@@ -1,5 +1,6 @@
 import TelegramBot from "node-telegram-bot-api";
 import "dotenv/config";
+import * as http from 'http';
 import { game } from "./game";
 import { formatTransactions } from "./calculator";
 import { Errors } from "./errors.enum";
@@ -104,16 +105,26 @@ bot.onText(/\/close_game/, (msg) => {
       bot.sendMessage(msg.chat.id, "⛔ Произошла ошибка при расчете.");
     }
   }
-
-  //
-  // const transactions = game.calculateTransactions();
-  //
-  // const response = formatTransactions(transactions);
-  //
-  // bot.sendMessage(msg.chat.id, response);
-  //
-  // // После расчёта сбрасываем список игроков
-  // game.resetGame();
 });
 
 console.log("Бот запущен...");
+
+
+// Функция для health check
+const requestListener = (req: http.IncomingMessage, res: http.ServerResponse) => {
+  if (req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('OK');
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+};
+
+// Создаем сервер
+const server = http.createServer(requestListener);
+
+// Настроим сервер на порт 8000
+server.listen(8000, () => {
+  console.log('Health check server running on port 8000');
+});
