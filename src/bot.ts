@@ -8,7 +8,7 @@ import { formatTransactions } from "./calculator";
 import { Errors } from "./errors.enum";
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN as string;
-const bot = new TelegramBot(TOKEN, { webHook: { port: 8000 } });
+const bot = new TelegramBot(TOKEN);
 
 // Укажи URL, на который Telegram будет слать обновления
 const url = process.env.WEBHOOK_URL!; // например: https://your-bot-name.koyeb.app
