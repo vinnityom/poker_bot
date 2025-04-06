@@ -1,13 +1,33 @@
 import TelegramBot from "node-telegram-bot-api";
 import "dotenv/config";
-import * as http from 'http';
+import express from "express";
+import bodyParser from "body-parser";
+import * as http from "http";
 import { game } from "./game";
 import { formatTransactions } from "./calculator";
 import { Errors } from "./errors.enum";
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN as string;
+const bot = new TelegramBot(TOKEN, { webHook: { port: 8000 } });
 
-const bot = new TelegramBot(TOKEN, { polling: true });
+// Укажи URL, на который Telegram будет слать обновления
+const url = process.env.WEBHOOK_URL!; // например: https://your-bot-name.koyeb.app
+bot.setWebHook(`${url}/bot${TOKEN}`);
+
+// Настрой express-сервер
+const app = express();
+app.use(bodyParser.json());
+
+// Передаём Telegram обновления через этот путь
+app.post(`/bot${TOKEN}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
+
+// Настрой endpoint для health check
+app.get("/health", (_req, res) => {
+  res.send("OK");
+});
 
 bot.onText(/\/start/, (msg) => {
   bot.sendMessage(
@@ -109,22 +129,7 @@ bot.onText(/\/close_game/, (msg) => {
 
 console.log("Бот запущен...");
 
-
-// Функция для health check
-const requestListener = (req: http.IncomingMessage, res: http.ServerResponse) => {
-  if (req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('OK');
-  } else {
-    res.writeHead(404);
-    res.end();
-  }
-};
-
-// Создаем сервер
-const server = http.createServer(requestListener);
-
-// Настроим сервер на порт 8000
-server.listen(8000, () => {
-  console.log('Health check server running on port 8000');
+// Запускаем express сервер
+app.listen(8000, () => {
+  console.log('Express server is running on port 8000');
 });
