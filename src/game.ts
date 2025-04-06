@@ -7,7 +7,7 @@ export type Player = {
   left: number;
 };
 
-class PokerGame {
+export class PokerGame {
   private players: Player[] = [];
 
   addPlayer(name: string, bought: number, left: number) {
@@ -99,5 +99,3 @@ class PokerGame {
     this.players = [];
   }
 }
-
-export const game = new PokerGame();

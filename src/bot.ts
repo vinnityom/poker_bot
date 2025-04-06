@@ -3,9 +3,18 @@ import "dotenv/config";
 import express from "express";
 import bodyParser from "body-parser";
 import * as http from "http";
-import { game } from "./game";
 import { formatTransactions } from "./calculator";
 import { Errors } from "./errors.enum";
+import { PokerGame } from "./game";
+
+const games = new Map<number, PokerGame>();
+
+function getGame(chatId: number): PokerGame {
+  if (!games.has(chatId)) {
+    games.set(chatId, new PokerGame());
+  }
+  return games.get(chatId)!;
+}
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN as string;
 const bot = new TelegramBot(TOKEN);
@@ -30,6 +39,7 @@ app.get("/health", (_req, res) => {
 });
 
 bot.onText(/\/start/, (msg) => {
+  console.log('start');
   bot.sendMessage(
     msg.chat.id,
     "Привет! Добавляй игроков командами:\n" +
@@ -44,6 +54,8 @@ bot.onText(/\/start/, (msg) => {
 bot.onText(/\/add_player (\S+) (\d+) (\d+)/, (msg, match) => {
   if (!match) return;
 
+  const game = getGame(msg.chat.id);
+
   const [, name, bought, left] = match;
   try {
     game.addPlayer(name, parseInt(bought), parseInt(left));
@@ -57,6 +69,8 @@ bot.onText(/\/add_player (\S+) (\d+) (\d+)/, (msg, match) => {
 
 bot.onText(/\/add_players (.+)/, (msg, match) => {
   if (!match) return;
+
+  const game = getGame(msg.chat.id);
 
   const playerData = match[1].split(" ");
   if (playerData.length % 3 !== 0) {
@@ -76,6 +90,8 @@ bot.onText(/\/edit_player (\S+) (\d+) (\d+)/, (msg, match) => {
 
   const [, name, bought, left] = match;
 
+  const game = getGame(msg.chat.id);
+
   try {
     game.editPlayer(name, parseInt(bought), parseInt(left));
     bot.sendMessage(msg.chat.id, `✅ Данные игрока ${name} обновлены!`);
@@ -92,11 +108,13 @@ bot.onText(/\/edit_player (\S+) (\d+) (\d+)/, (msg, match) => {
 });
 
 bot.onText(/\/list_players/, (msg) => {
+  const game = getGame(msg.chat.id);
   const playerList = game.getPlayerList();
   bot.sendMessage(msg.chat.id, playerList);
 });
 
 bot.onText(/\/close_game/, (msg) => {
+  const game = getGame(msg.chat.id);
   const players = game.getPlayers();
 
   if (players.length === 0) {
@@ -131,5 +149,5 @@ console.log("Бот запущен...");
 
 // Запускаем express сервер
 app.listen(8000, () => {
-  console.log('Express server is running on port 8000');
+  console.log("Express server is running on port 8000");
 });
