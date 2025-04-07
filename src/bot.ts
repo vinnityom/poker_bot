@@ -5,12 +5,14 @@ import bodyParser from "body-parser";
 import { formatTransactions } from "./calculator";
 import { Errors } from "./errors.enum";
 import { PokerGame } from "./game";
+import { deleteGame, loadGame, saveGame } from "./game-storage";
 
 const games = new Map<number, PokerGame>();
 
 function getGame(chatId: number): PokerGame {
   if (!games.has(chatId)) {
-    games.set(chatId, new PokerGame());
+    const game = loadGame(chatId);
+    games.set(chatId, game);
   }
   return games.get(chatId)!;
 }
@@ -18,27 +20,22 @@ function getGame(chatId: number): PokerGame {
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN as string;
 const bot = new TelegramBot(TOKEN);
 
-// Укажи URL, на который Telegram будет слать обновления
-const url = process.env.WEBHOOK_URL!; // например: https://your-bot-name.koyeb.app
+const url = process.env.WEBHOOK_URL!;
 bot.setWebHook(`${url}/bot${TOKEN}`);
 
-// Настрой express-сервер
 const app = express();
 app.use(bodyParser.json());
 
-// Передаём Telegram обновления через этот путь
 app.post(`/bot${TOKEN}`, (req, res) => {
   bot.processUpdate(req.body);
   res.sendStatus(200);
 });
 
-// Настрой endpoint для health check
 app.get("/health", (_req, res) => {
   res.send("OK");
 });
 
 bot.onText(/\/start/, (msg) => {
-  console.log('start');
   bot.sendMessage(
     msg.chat.id,
     "Привет! Добавляй игроков командами:\n" +
@@ -59,6 +56,8 @@ bot.onText(/\/add_player (\S+) (\d+) (\d+)/, (msg, match) => {
   const [, name, bought, left] = match;
   try {
     game.addPlayer(name, parseInt(bought), parseInt(left));
+    saveGame(msg.chat.id, game);
+
     bot.sendMessage(msg.chat.id, `✅ Игрок ${name} добавлен!`);
   } catch (error) {
     if (error === Errors.PlayerDuplicate) {
@@ -82,6 +81,8 @@ bot.onText(/\/add_players (.+)/, (msg, match) => {
   }
 
   const result = game.addPlayers(playerData);
+  saveGame(msg.chat.id, game);
+
   bot.sendMessage(msg.chat.id, result);
 });
 
@@ -94,6 +95,8 @@ bot.onText(/\/edit_player (\S+) (\d+) (\d+)/, (msg, match) => {
 
   try {
     game.editPlayer(name, parseInt(bought), parseInt(left));
+    saveGame(msg.chat.id, game);
+
     bot.sendMessage(msg.chat.id, `✅ Данные игрока ${name} обновлены!`);
   } catch (error) {
     if (error === Errors.PlayerNotFound) {
@@ -129,7 +132,7 @@ bot.onText(/\/close_game/, (msg) => {
     const response = formatTransactions(transactions);
     bot.sendMessage(msg.chat.id, response);
 
-    // После расчёта сбрасываем список игроков
+    deleteGame(msg.chat.id);
     game.resetGame();
   } catch (error: any) {
     if (error.name === Errors.ImbalanceError) {
