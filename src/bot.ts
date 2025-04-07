@@ -2,7 +2,6 @@ import TelegramBot from "node-telegram-bot-api";
 import "dotenv/config";
 import express from "express";
 import bodyParser from "body-parser";
-import * as http from "http";
 import { formatTransactions } from "./calculator";
 import { Errors } from "./errors.enum";
 import { PokerGame } from "./game";
@@ -45,6 +44,7 @@ bot.onText(/\/start/, (msg) => {
     "Привет! Добавляй игроков командами:\n" +
     "➕ `/add_player {имя} {закуп} {выход}` – добавить одного игрока\n" +
     "➕ `/add_players {имя1} {закуп1} {выход1} {имя2} {закуп2} {выход2} ...` – добавить сразу несколько игроков\n" +
+    "➕ `/edit_player {имя} {закуп} {выход}` – редактировать уже существующего игрока\n" +
     "📃 `/list_players` – показать список игроков\n" +
     "📊 `/close_game` – рассчитать выплаты и завершить игру",
     { parse_mode: "Markdown" },
