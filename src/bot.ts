@@ -5,152 +5,150 @@ import bodyParser from "body-parser";
 import { formatTransactions } from "./calculator";
 import { Errors } from "./errors.enum";
 import { PokerGame } from "./game";
-import { deleteGame, loadGame, saveGame } from "./game-storage";
+import { deleteGame, initStorage, loadGame, saveGame } from "./game-storage";
 
-const games = new Map<number, PokerGame>();
-
-function getGame(chatId: number): PokerGame {
-  if (!games.has(chatId)) {
-    const game = loadGame(chatId);
-    games.set(chatId, game);
+initStorage().then(() => {
+  function getGame(chatId: number): PokerGame {
+    return loadGame(chatId);
   }
-  return games.get(chatId)!;
-}
 
-const TOKEN = process.env.TELEGRAM_BOT_TOKEN as string;
-const bot = new TelegramBot(TOKEN);
+  const TOKEN = process.env.TELEGRAM_BOT_TOKEN as string;
+  const bot = new TelegramBot(TOKEN);
 
-const url = process.env.WEBHOOK_URL!;
-bot.setWebHook(`${url}/bot${TOKEN}`);
+  const url = process.env.WEBHOOK_URL!;
+  // bot.setWebHook(`${url}/bot${TOKEN}`);
 
-const app = express();
-app.use(bodyParser.json());
+  bot.startPolling();
 
-app.post(`/bot${TOKEN}`, (req, res) => {
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
-});
+  const app = express();
+  app.use(bodyParser.json());
 
-app.get("/health", (_req, res) => {
-  res.send("OK");
-});
+  app.post(`/bot${TOKEN}`, (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
+  });
 
-bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(
-    msg.chat.id,
-    "Привет! Добавляй игроков командами:\n" +
-    "➕ `/add_player {имя} {закуп} {выход}` – добавить одного игрока\n" +
-    "➕ `/add_players {имя1} {закуп1} {выход1} {имя2} {закуп2} {выход2} ...` – добавить сразу несколько игроков\n" +
-    "➕ `/edit_player {имя} {закуп} {выход}` – редактировать уже существующего игрока\n" +
-    "📃 `/list_players` – показать список игроков\n" +
-    "📊 `/close_game` – рассчитать выплаты и завершить игру",
-    { parse_mode: "Markdown" },
-  );
-});
+  app.get("/health", (_req, res) => {
+    res.send("OK");
+  });
 
-bot.onText(/\/add_player (\S+) (\d+) (\d+)/, (msg, match) => {
-  if (!match) return;
-
-  const game = getGame(msg.chat.id);
-
-  const [, name, bought, left] = match;
-  try {
-    game.addPlayer(name, parseInt(bought), parseInt(left));
-    saveGame(msg.chat.id, game);
-
-    bot.sendMessage(msg.chat.id, `✅ Игрок ${name} добавлен!`);
-  } catch (error) {
-    if (error === Errors.PlayerDuplicate) {
-      bot.sendMessage(msg.chat.id, `⚠️  Игрок ${name} уже существует!`);
-    }
-  }
-});
-
-bot.onText(/\/add_players (.+)/, (msg, match) => {
-  if (!match) return;
-
-  const game = getGame(msg.chat.id);
-
-  const playerData = match[1].split(" ");
-  if (playerData.length % 3 !== 0) {
+  bot.onText(/\/start/, (msg) => {
     bot.sendMessage(
       msg.chat.id,
-      "⛔ Ошибка: Данные должны быть в формате `/add_players имя1 закуп1 выход1 имя2 закуп2 выход2`",
+      "Привет! Добавляй игроков командами:\n" +
+      "➕ `/add_player {имя} {закуп} {выход}` – добавить одного игрока\n" +
+      "➕ `/add_players {имя1} {закуп1} {выход1} {имя2} {закуп2} {выход2} ...` – добавить сразу несколько игроков\n" +
+      "➕ `/edit_player {имя} {закуп} {выход}` – редактировать уже существующего игрока\n" +
+      "📃 `/list_players` – показать список игроков\n" +
+      "📊 `/close_game` – рассчитать выплаты и завершить игру",
+      { parse_mode: "Markdown" },
     );
-    return;
-  }
+  });
 
-  const result = game.addPlayers(playerData);
-  saveGame(msg.chat.id, game);
+  bot.onText(/\/add_player (\S+) (\d+) (\d+)/, (msg, match) => {
+    if (!match) return;
 
-  bot.sendMessage(msg.chat.id, result);
-});
+    const game = getGame(msg.chat.id);
 
-bot.onText(/\/edit_player (\S+) (\d+) (\d+)/, (msg, match) => {
-  if (!match) return;
+    const [, name, bought, left] = match;
+    try {
+      game.addPlayer(name, parseInt(bought), parseInt(left));
+      saveGame();
 
-  const [, name, bought, left] = match;
+      bot.sendMessage(msg.chat.id, `✅ Игрок ${name} добавлен!`);
+    } catch (error) {
+      if (error === Errors.PlayerDuplicate) {
+        bot.sendMessage(msg.chat.id, `⚠️  Игрок ${name} уже существует!`);
+      }
+    }
+  });
 
-  const game = getGame(msg.chat.id);
+  bot.onText(/\/add_players (.+)/, (msg, match) => {
+    if (!match) return;
 
-  try {
-    game.editPlayer(name, parseInt(bought), parseInt(left));
-    saveGame(msg.chat.id, game);
+    const game = getGame(msg.chat.id);
 
-    bot.sendMessage(msg.chat.id, `✅ Данные игрока ${name} обновлены!`);
-  } catch (error) {
-    if (error === Errors.PlayerNotFound) {
-      bot.sendMessage(msg.chat.id, `⚠️ Игрок ${name} не найден!`);
-    } else {
+    const playerData = match[1].split(" ");
+    if (playerData.length % 3 !== 0) {
       bot.sendMessage(
         msg.chat.id,
-        `⛔ Ошибка при редактировании игрока ${name}`,
+        "⛔ Ошибка: Данные должны быть в формате `/add_players имя1 закуп1 выход1 имя2 закуп2 выход2`",
       );
+      return;
     }
-  }
-});
 
-bot.onText(/\/list_players/, (msg) => {
-  const game = getGame(msg.chat.id);
-  const playerList = game.getPlayerList();
-  bot.sendMessage(msg.chat.id, playerList);
-});
+    const result = game.addPlayers(playerData);
+    saveGame();
 
-bot.onText(/\/close_game/, (msg) => {
-  const game = getGame(msg.chat.id);
-  const players = game.getPlayers();
+    bot.sendMessage(msg.chat.id, result);
+  });
 
-  if (players.length === 0) {
-    bot.sendMessage(
-      msg.chat.id,
-      "Нет игроков. Добавьте их командой /add_player.",
-    );
-    return;
-  }
-  try {
-    const transactions = game.calculateTransactions();
-    const response = formatTransactions(transactions);
-    bot.sendMessage(msg.chat.id, response);
+  bot.onText(/\/edit_player (\S+) (\d+) (\d+)/, (msg, match) => {
+    if (!match) return;
 
-    deleteGame(msg.chat.id);
-    game.resetGame();
-  } catch (error: any) {
-    if (error.name === Errors.ImbalanceError) {
+    const [, name, bought, left] = match;
+
+    const game = getGame(msg.chat.id);
+
+    try {
+      game.editPlayer(name, parseInt(bought), parseInt(left));
+      saveGame();
+
+      bot.sendMessage(msg.chat.id, `✅ Данные игрока ${name} обновлены!`);
+    } catch (error) {
+      if (error === Errors.PlayerNotFound) {
+        bot.sendMessage(msg.chat.id, `⚠️ Игрок ${name} не найден!`);
+      } else {
+        bot.sendMessage(
+          msg.chat.id,
+          `⛔ Ошибка при редактировании игрока ${name}`,
+        );
+      }
+    }
+  });
+
+  bot.onText(/\/list_players/, (msg) => {
+    const game = getGame(msg.chat.id);
+    const playerList = game.getPlayerList();
+    bot.sendMessage(msg.chat.id, playerList);
+  });
+
+  bot.onText(/\/close_game/, (msg) => {
+    const game = getGame(msg.chat.id);
+    const players = game.getPlayers();
+
+    if (players.length === 0) {
       bot.sendMessage(
         msg.chat.id,
-        `❌ Ошибка: ${error.message}\n` +
-        `Разница: ${error.difference > 0 ? "+" : ""}${error.difference}\n\n` +
-        `📃 Список игроков:\n${error.playerList}`,
+        "Нет игроков. Добавьте их командой /add_player.",
       );
-    } else {
-      bot.sendMessage(msg.chat.id, "⛔ Произошла ошибка при расчете.");
+      return;
     }
-  }
-});
+    try {
+      const transactions = game.calculateTransactions();
+      const response = formatTransactions(transactions);
+      bot.sendMessage(msg.chat.id, response);
 
-console.log("Бот запущен...");
+      deleteGame(msg.chat.id);
+      game.resetGame();
+    } catch (error: any) {
+      if (error.name === Errors.ImbalanceError) {
+        bot.sendMessage(
+          msg.chat.id,
+          `❌ Ошибка: ${error.message}\n` +
+          `Разница: ${error.difference > 0 ? "+" : ""}${error.difference}\n\n` +
+          `📃 Список игроков:\n${error.playerList}`,
+        );
+      } else {
+        bot.sendMessage(msg.chat.id, "⛔ Произошла ошибка при расчете.");
+      }
+    }
+  });
 
-// Запускаем express сервер
-app.listen(8000, () => {
-  console.log("Express server is running on port 8000");
+  console.log("Бот запущен...");
+
+  // Запускаем express сервер
+  app.listen(8000, () => {
+    console.log("Express server is running on port 8000");
+  });
 });

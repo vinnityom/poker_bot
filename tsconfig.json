@@ -6,7 +6,8 @@
     "target": "ES6", // Указываем целевую версию JS (можно изменить)
     "module": "CommonJS", // Используем CommonJS модули
     "strict": true, // Включаем строгую типизацию
-    "forceConsistentCasingInFileNames": true /* Ensure that casing is correct in imports. */,
+    "forceConsistentCasingInFileNames": true, /* Ensure that casing is correct in imports. */
+    "moduleResolution": "node",
     "skipLibCheck": true // Пропускаем проверку типов библиотек
   },
   "include": [
