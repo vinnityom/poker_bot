@@ -16,9 +16,9 @@ initStorage().then(() => {
   const bot = new TelegramBot(TOKEN);
 
   const url = process.env.WEBHOOK_URL!;
-  // bot.setWebHook(`${url}/bot${TOKEN}`);
+  bot.setWebHook(`${url}/bot${TOKEN}`);
 
-  bot.startPolling();
+  // bot.startPolling();
 
   const app = express();
   app.use(bodyParser.json());
